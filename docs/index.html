@@ -23,11 +23,11 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
             background: var(--bg);
             color: var(--text);
-            line-height: 1.6;
+            line-height: 1.7;
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 860px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
         }
@@ -62,6 +62,24 @@
             margin-bottom: 2rem;
         }
 
+        ul, ol {
+            margin: 0 0 1rem 1.5rem;
+            color: var(--text-muted);
+        }
+
+        li { margin-bottom: 0.35rem; }
+
+        strong { color: var(--text); }
+
+        code {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 0.1em 0.35em;
+            font-size: 0.85em;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+        }
+
         .env-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -89,9 +107,7 @@
             font-weight: 600;
         }
 
-        .ram-bar-section {
-            margin: 1.5rem 0;
-        }
+        .ram-bar-section { margin: 1.5rem 0; }
 
         .ram-row {
             display: flex;
@@ -113,7 +129,6 @@
             background: var(--surface);
             border-radius: 4px;
             overflow: hidden;
-            position: relative;
         }
 
         .ram-bar {
@@ -143,9 +158,7 @@
             gap: 0.25rem;
         }
 
-        .bar-group {
-            margin-bottom: 1.25rem;
-        }
+        .bar-group { margin-bottom: 1.25rem; }
 
         .bar-group-label {
             font-size: 0.8rem;
@@ -175,7 +188,6 @@
             background: rgba(255,255,255,0.03);
             border-radius: 3px;
             overflow: hidden;
-            position: relative;
         }
 
         .bar-fill {
@@ -184,8 +196,7 @@
             display: flex;
             align-items: center;
             justify-content: flex-start;
-            padding-right: 8px;
-            padding-left: 8px;
+            padding: 0 8px;
             font-size: 0.7rem;
             font-weight: 600;
             color: #fff;
@@ -256,6 +267,14 @@
 
         .note strong { color: var(--text); }
 
+        .pros-cons { margin: 1rem 0; }
+        .pros-cons h4 {
+            font-size: 0.9rem;
+            margin: 1rem 0 0.5rem;
+        }
+        .pros-cons h4.strengths { color: var(--accent-nats); }
+        .pros-cons h4.weaknesses { color: #e74c3c; }
+
         a { color: var(--link); text-decoration: none; }
         a:hover { text-decoration: underline; }
 
@@ -279,349 +298,248 @@
         <h1>Message Broker Throughput</h1>
         <p class="subtitle">RabbitMQ 4.2 vs Kafka 4.2 (KRaft) vs NATS 2.12 (JetStream)</p>
 
+        <p>I started using NATS in one of my projects and was generally happy with it, but I wanted to verify the performance claims for myself. Is it really as fast as people say, or is that just marketing and cherry-picked benchmarks? The best way to find out was to write my own tests and compare NATS against the two most common alternatives: RabbitMQ and Kafka.</p>
+
+        <p>This post covers throughput testing of all three brokers on two messaging patterns: async producer-consumer queue, and request-reply. Request-reply is not the typical use case for message brokers, but NATS supports it natively, so it was worth measuring how the others perform when forced into that pattern.</p>
+
         <div class="legend">
             <div class="legend-item"><div class="legend-dot" style="background:var(--accent-rabbit)"></div> RabbitMQ</div>
             <div class="legend-item"><div class="legend-dot" style="background:var(--accent-kafka)"></div> Kafka</div>
             <div class="legend-item"><div class="legend-dot" style="background:var(--accent-nats)"></div> NATS JetStream</div>
         </div>
 
+        <!-- ==================== TEST ENVIRONMENT ==================== -->
+
         <h2>Test Environment</h2>
+        <p>All three brokers ran in Docker containers on the same host. No custom tuning was applied to any broker: default configurations only.</p>
+
         <div class="env-grid">
-            <div class="env-card">
-                <div class="label">CPU</div>
-                <div class="value">Ryzen 7 8845HS</div>
-            </div>
-            <div class="env-card">
-                <div class="label">Cores</div>
-                <div class="value">8C / 16T</div>
-            </div>
-            <div class="env-card">
-                <div class="label">Runtime</div>
-                <div class="value">.NET 10.0.4</div>
-            </div>
-            <div class="env-card">
-                <div class="label">Framework</div>
-                <div class="value">BenchmarkDotNet 0.15.8</div>
-            </div>
-            <div class="env-card">
-                <div class="label">Iterations</div>
-                <div class="value">3 warmup + 10 measured</div>
-            </div>
-            <div class="env-card">
-                <div class="label">Metric</div>
-                <div class="value">P95 (ms)</div>
-            </div>
+            <div class="env-card"><div class="label">CPU</div><div class="value">Ryzen 7 8845HS</div></div>
+            <div class="env-card"><div class="label">Cores</div><div class="value">8C / 16T</div></div>
+            <div class="env-card"><div class="label">OS</div><div class="value">Windows 11</div></div>
+            <div class="env-card"><div class="label">Runtime</div><div class="value">.NET 10.0.4</div></div>
+            <div class="env-card"><div class="label">Framework</div><div class="value">BenchmarkDotNet 0.15.8</div></div>
+            <div class="env-card"><div class="label">Metric</div><div class="value">P95 (ms)</div></div>
         </div>
 
-        <h2>Idle RAM Consumption (Cold Start)</h2>
-        <p>Measured on freshly started containers with no accumulated data or active connections.</p>
+        <h3>Broker Versions</h3>
+        <div class="chart-container">
+            <table>
+                <thead><tr><th>Broker</th><th style="text-align:left">Docker Image</th><th style="text-align:left">Configuration</th></tr></thead>
+                <tbody>
+                    <tr><td>RabbitMQ</td><td style="text-align:left"><code>rabbitmq:4.2-management</code></td><td style="text-align:left">Default settings, AMQP 0.9.1</td></tr>
+                    <tr><td>Kafka</td><td style="text-align:left"><code>apache/kafka:4.2.0</code></td><td style="text-align:left">KRaft mode, single node, 1 partition</td></tr>
+                    <tr><td>NATS</td><td style="text-align:left"><code>nats:2.12-alpine</code></td><td style="text-align:left">JetStream enabled (<code>-js</code>)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Idle RAM (Cold Start)</h3>
+        <p>Measured via <code>docker stats</code> on freshly started containers with no accumulated data or active connections.</p>
         <div class="ram-bar-section">
             <div class="ram-row">
                 <div class="ram-label">NATS</div>
-                <div class="ram-bar-bg">
-                    <div class="ram-bar" style="width: 1.8%; background: var(--accent-nats);">6 MiB</div>
-                </div>
+                <div class="ram-bar-bg"><div class="ram-bar" style="width: 1.8%; background: var(--accent-nats);">6 MiB</div></div>
             </div>
             <div class="ram-row">
                 <div class="ram-label">RabbitMQ</div>
-                <div class="ram-bar-bg">
-                    <div class="ram-bar" style="width: 37.3%; background: var(--accent-rabbit);">122 MiB</div>
-                </div>
+                <div class="ram-bar-bg"><div class="ram-bar" style="width: 37.3%; background: var(--accent-rabbit);">122 MiB</div></div>
             </div>
             <div class="ram-row">
                 <div class="ram-label">Kafka</div>
-                <div class="ram-bar-bg">
-                    <div class="ram-bar" style="width: 100%; background: var(--accent-kafka);">327 MiB</div>
-                </div>
+                <div class="ram-bar-bg"><div class="ram-bar" style="width: 100%; background: var(--accent-kafka);">327 MiB</div></div>
             </div>
         </div>
+        <p>Kafka's JVM-based architecture is immediately visible: 54x the memory of NATS and 2.7x of RabbitMQ on cold start. NATS is the lightest at 6 MiB.</p>
 
-        <h2>Async Queue (Producer-Consumer)</h2>
-        <p>250 concurrent publishers, 1 consumer. Time = wall-clock from first publish to last received message.</p>
+        <h3>BenchmarkDotNet Configuration</h3>
+        <ul>
+            <li>3 warmup iterations, 10 measured iterations per scenario</li>
+            <li><code>InvocationCount = 1</code>, <code>UnrollFactor = 1</code> (each iteration is a single benchmark call)</li>
+            <li><code>RunStrategy = Monitoring</code></li>
+            <li>GC: non-concurrent, forced collections, non-server mode</li>
+            <li>ThreadPool: minimum 100 worker + 100 I/O completion port threads</li>
+        </ul>
 
-        <h3>Small to Medium Payloads</h3>
+        <div class="note">
+            <strong>Note on metric:</strong> All result tables use P95 (95th percentile) rather than Mean. P95 better represents worst-case performance a system will realistically encounter, filtering out warm-up noise while capturing tail latency.
+        </div>
+
+        <!-- ==================== TEST PARAMETERS ==================== -->
+
+        <h2>Test Parameters</h2>
+        <p>The message counts and payload sizes were chosen to cover two dimensions: the number of concurrent messages the broker must route, and the size of individual payloads. Counts are inversely proportional to payload size to keep total benchmark runtime within a few minutes per scenario while still loading the broker enough to reveal its throughput characteristics.</p>
+
+        <h3>Async Queue (250 concurrent publishers, 1 consumer)</h3>
+        <div class="chart-container">
+            <table>
+                <thead><tr><th>Messages</th><th>Payload</th><th>Total Volume</th></tr></thead>
+                <tbody>
+                    <tr><td>50,000</td><td>256 B</td><td>12.8 MB</td></tr>
+                    <tr><td>25,000</td><td>1 KB</td><td>25 MB</td></tr>
+                    <tr><td>10,000</td><td>4 KB</td><td>40 MB</td></tr>
+                    <tr><td>5,000</td><td>64 KB</td><td>327 MB</td></tr>
+                    <tr><td>2,500</td><td>128 KB</td><td>335 MB</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Request-Reply (150 concurrent publishers)</h3>
+        <div class="chart-container">
+            <table>
+                <thead><tr><th>Messages</th><th>Payload</th><th>Total Volume</th></tr></thead>
+                <tbody>
+                    <tr><td>25,000</td><td>256 B</td><td>6.4 MB</td></tr>
+                    <tr><td>10,000</td><td>1 KB</td><td>10 MB</td></tr>
+                    <tr><td>5,000</td><td>4 KB</td><td>20 MB</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <p>The async pattern uses more publishers (250 vs 150) and reaches larger payloads because bulk throughput is the primary concern. Request-reply uses fewer messages and smaller payloads reflecting the typical RPC use case where latency matters more than volume.</p>
+
+        <!-- ==================== IMPLEMENTATION ==================== -->
+
+        <h2>Implementation Details</h2>
+
+        <h3>Async Queue (Producer-Consumer)</h3>
+        <p>All three implementations follow the same structure: N publishers concurrently push messages into a queue/topic/stream, one consumer reads everything. The benchmark measures wall-clock time from the first publish to the last received message.</p>
+
+        <p><strong>RabbitMQ</strong> (<code>RabbitMQ.Client</code> v7.2.1): persistent messages, QoS prefetch = 100, manual ACK, separate connections for publisher and consumer.</p>
+        <p><strong>Kafka</strong> (<code>Confluent.Kafka</code> v2.13.2): idempotent producer, 1 GB write buffer, manual offset commit, single partition, consumer group ID randomized per iteration.</p>
+        <p><strong>NATS JetStream</strong> (<code>NATS.Net</code> v2.7.3): file-backed stream, workqueue retention, async persistence, explicit ACK, 1 GB writer buffer.</p>
+
+        <h3>Request-Reply</h3>
+        <p>NATS has native request-reply: <code>RequestAsync</code> sends a message and returns a response in a single call. The broker handles response routing internally.</p>
+        <p>RabbitMQ and Kafka lack this primitive. For both, request-reply was implemented via correlation IDs:</p>
+        <ol>
+            <li>Requester generates a UUID, attaches it to the message, stores a <code>TaskCompletionSource</code> in a <code>ConcurrentDictionary</code></li>
+            <li>Responder receives the message, echoes the correlation ID back on a dedicated reply queue/topic</li>
+            <li>Requester's reply listener matches the ID and completes the corresponding task</li>
+        </ol>
+        <p>Each "request" in RabbitMQ/Kafka involves 4 broker operations (publish request, consume request, publish reply, consume reply) vs 1 round-trip in NATS.</p>
+
+        <!-- ==================== RESULTS: ASYNC ==================== -->
+
+        <h2>Results: Async Queue</h2>
+        <p>All values are P95 (95th percentile) completion time in milliseconds. Lower is better. Ratio columns show time relative to NATS JetStream (baseline).</p>
+
         <div class="chart-container">
             <div class="bar-chart">
                 <div class="bar-group">
                     <div class="bar-group-label">50,000 x 256 B (12.8 MB total)</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 2.4%;">856 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 4.2%;">1,512 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">36,035 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 2.6%;">944 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 4.2%;">1,521 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">35,856 ms</div></div></div>
                 </div>
-
                 <div class="bar-group">
                     <div class="bar-group-label">25,000 x 1 KB (25 MB total)</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 2.5%;">470 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 4.8%;">881 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">18,469 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 2.7%;">511 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 4.9%;">905 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">18,629 ms</div></div></div>
                 </div>
-
                 <div class="bar-group">
                     <div class="bar-group-label">10,000 x 4 KB (40 MB total)</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 3.2%;">269 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 5.1%;">426 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">8,350 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 3.1%;">256 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 5.3%;">442 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">8,329 ms</div></div></div>
                 </div>
-            </div>
-        </div>
-
-        <h3>Large Payloads</h3>
-        <div class="chart-container">
-            <div class="bar-chart">
                 <div class="bar-group">
                     <div class="bar-group-label">5,000 x 64 KB (327 MB total)</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 6.8%;">534 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 11.0%;">864 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">7,833 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 7.1%;">534 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 11.7%;">878 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">7,496 ms</div></div></div>
                 </div>
-
                 <div class="bar-group">
                     <div class="bar-group-label">2,500 x 128 KB (335 MB total)</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 8.4%;">601 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 10.5%;">753 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">7,145 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 9.6%;">690 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 10.3%;">735 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">7,162 ms</div></div></div>
                 </div>
             </div>
         </div>
 
-        <h3>Data Table (Async Queue, P95 ms)</h3>
+        <h3>P95 Completion Time (ms)</h3>
         <div class="chart-container">
             <table>
-                <thead>
-                    <tr>
-                        <th>Scenario</th>
-                        <th>RabbitMQ</th>
-                        <th>Kafka</th>
-                        <th>NATS JS</th>
-                        <th>Rabbit / NATS</th>
-                        <th>Kafka / NATS</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Scenario</th><th>RabbitMQ</th><th>Kafka</th><th>NATS JS</th><th>Rabbit / NATS</th><th>Kafka / NATS</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td>50K x 256 B</td>
-                        <td>1,512</td>
-                        <td>36,035</td>
-                        <td class="best">856</td>
-                        <td>1.77</td>
-                        <td>42.1</td>
-                    </tr>
-                    <tr>
-                        <td>25K x 1 KB</td>
-                        <td>881</td>
-                        <td>18,469</td>
-                        <td class="best">470</td>
-                        <td>1.87</td>
-                        <td>39.3</td>
-                    </tr>
-                    <tr>
-                        <td>10K x 4 KB</td>
-                        <td>426</td>
-                        <td>8,350</td>
-                        <td class="best">269</td>
-                        <td>1.58</td>
-                        <td>31.0</td>
-                    </tr>
-                    <tr>
-                        <td>5K x 64 KB</td>
-                        <td class="best-rabbit">534</td>
-                        <td>7,833</td>
-                        <td>864</td>
-                        <td>0.62</td>
-                        <td>9.07</td>
-                    </tr>
-                    <tr>
-                        <td>2.5K x 128 KB</td>
-                        <td class="best-rabbit">601</td>
-                        <td>7,145</td>
-                        <td>753</td>
-                        <td>0.80</td>
-                        <td>9.49</td>
-                    </tr>
+                    <tr><td>50K x 256 B</td><td>1,521</td><td>35,856</td><td class="best">944</td><td>1.61</td><td>38.98</td></tr>
+                    <tr><td>25K x 1 KB</td><td>905</td><td>18,629</td><td class="best">511</td><td>1.77</td><td>36.46</td></tr>
+                    <tr><td>10K x 4 KB</td><td>442</td><td>8,329</td><td class="best">256</td><td>1.73</td><td>32.54</td></tr>
+                    <tr><td>5K x 64 KB</td><td class="best-rabbit">534</td><td>7,496</td><td>878</td><td>0.61</td><td>8.54</td></tr>
+                    <tr><td>2.5K x 128 KB</td><td class="best-rabbit">690</td><td>7,162</td><td>735</td><td>0.94</td><td>9.74</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <h3>Messages per Second (Async Queue, at P95)</h3>
+        <h3>Messages per Second (at P95)</h3>
         <div class="chart-container">
             <table>
-                <thead>
-                    <tr>
-                        <th>Scenario</th>
-                        <th>RabbitMQ</th>
-                        <th>Kafka</th>
-                        <th>NATS JS</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Scenario</th><th>RabbitMQ</th><th>Kafka</th><th>NATS JS</th></tr></thead>
                 <tbody>
-                    <tr><td>50K x 256 B</td><td>33,069</td><td>1,388</td><td class="best">58,411</td></tr>
-                    <tr><td>25K x 1 KB</td><td>28,376</td><td>1,354</td><td class="best">53,191</td></tr>
-                    <tr><td>10K x 4 KB</td><td>23,474</td><td>1,198</td><td class="best">37,175</td></tr>
-                    <tr><td>5K x 64 KB</td><td class="best-rabbit">9,363</td><td>638</td><td>5,787</td></tr>
-                    <tr><td>2.5K x 128 KB</td><td class="best-rabbit">4,160</td><td>350</td><td>3,320</td></tr>
+                    <tr><td>50K x 256 B</td><td>32,873</td><td>1,394</td><td class="best">52,966</td></tr>
+                    <tr><td>25K x 1 KB</td><td>27,624</td><td>1,342</td><td class="best">48,924</td></tr>
+                    <tr><td>10K x 4 KB</td><td>22,624</td><td>1,201</td><td class="best">39,063</td></tr>
+                    <tr><td>5K x 64 KB</td><td class="best-rabbit">9,363</td><td>667</td><td>5,695</td></tr>
+                    <tr><td>2.5K x 128 KB</td><td class="best-rabbit">3,623</td><td>349</td><td>3,401</td></tr>
                 </tbody>
             </table>
         </div>
+
+        <p>On small to medium payloads (up to 4 KB), NATS JetStream processes messages 1.6-1.8x faster than RabbitMQ at P95. On large payloads (64 KB+), RabbitMQ takes the lead at 61-94% of NATS's time. RabbitMQ allocates 7-12 MB managed memory for large payloads, while NATS allocates 368-401 MB. AMQP framing is more efficient for large contiguous payloads.</p>
+        <p>Kafka is 9-38x slower than NATS at P95. This is expected: Kafka's commit log architecture adds overhead that only pays off with horizontal scaling across multiple partitions and nodes.</p>
 
         <h3>Managed Heap Allocation</h3>
         <div class="chart-container">
             <table>
-                <thead>
-                    <tr>
-                        <th>Scenario</th>
-                        <th>RabbitMQ</th>
-                        <th>Kafka</th>
-                        <th>NATS JS</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Scenario</th><th>RabbitMQ</th><th>Kafka</th><th>NATS JS</th></tr></thead>
                 <tbody>
-                    <tr><td>50K x 256 B</td><td>106 MB</td><td>115 MB</td><td>308 MB</td></tr>
-                    <tr><td>25K x 1 KB</td><td>54 MB</td><td>76 MB</td><td>172 MB</td></tr>
-                    <tr><td>10K x 4 KB</td><td>22 MB</td><td>60 MB</td><td>102 MB</td></tr>
-                    <tr><td>5K x 64 KB</td><td>12 MB</td><td>323 MB</td><td>355 MB</td></tr>
-                    <tr><td>2.5K x 128 KB</td><td>7 MB</td><td>318 MB</td><td>333 MB</td></tr>
+                    <tr><td>50K x 256 B</td><td>106 MB</td><td>115 MB</td><td>678 MB</td></tr>
+                    <tr><td>25K x 1 KB</td><td>54 MB</td><td>76 MB</td><td>342 MB</td></tr>
+                    <tr><td>10K x 4 KB</td><td>22 MB</td><td>60 MB</td><td>205 MB</td></tr>
+                    <tr><td>5K x 64 KB</td><td>12 MB</td><td>323 MB</td><td>401 MB</td></tr>
+                    <tr><td>2.5K x 128 KB</td><td>7 MB</td><td>318 MB</td><td>368 MB</td></tr>
                 </tbody>
             </table>
         </div>
+        <p>RabbitMQ consistently uses the least managed memory. NATS allocates significantly more due to the 1 GB writer buffer configuration. Kafka's allocations spike with large payloads (318-323 MB) due to its own producer buffer (<code>QueueBufferingMaxKbytes = 1 GB</code>).</p>
 
-        <h2>Request-Reply</h2>
-        <p>150 concurrent publishers. NATS uses native <code>RequestAsync</code>. RabbitMQ and Kafka use correlation-ID emulation (4 broker ops per request vs 1 round-trip).</p>
+        <!-- ==================== RESULTS: REQUEST-REPLY ==================== -->
+
+        <h2>Results: Request-Reply</h2>
+        <p>All values are P95 completion time. Ratio columns show time relative to NATS (baseline).</p>
 
         <div class="chart-container">
             <div class="bar-chart">
                 <div class="bar-group">
                     <div class="bar-group-label">25,000 x 256 B</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 1.1%;">419 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 61.2%;">23,080 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">37,723 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 1.0%;">397 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 88.2%;">36,572 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 100%;">41,450 ms</div></div></div>
                 </div>
-
                 <div class="bar-group">
                     <div class="bar-group-label">10,000 x 1 KB</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 1.4%;">224 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 80.0%;">12,435 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 100%;">15,546 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 1.1%;">226 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 70.5%;">15,113 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 100%;">21,434 ms</div></div></div>
                 </div>
-
                 <div class="bar-group">
                     <div class="bar-group-label">5,000 x 4 KB</div>
-                    <div class="bar-row">
-                        <div class="bar-broker">NATS</div>
-                        <div class="bar-track"><div class="bar-fill nats" style="width: 1.9%;">177 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">Kafka</div>
-                        <div class="bar-track"><div class="bar-fill kafka" style="width: 70.1%;">6,586 ms</div></div>
-                    </div>
-                    <div class="bar-row">
-                        <div class="bar-broker">RabbitMQ</div>
-                        <div class="bar-track"><div class="bar-fill rabbit" style="width: 100%;">9,384 ms</div></div>
-                    </div>
+                    <div class="bar-row"><div class="bar-broker">NATS</div><div class="bar-track"><div class="bar-fill nats" style="width: 1.3%;">159 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">Kafka</div><div class="bar-track"><div class="bar-fill kafka" style="width: 60.0%;">7,339 ms</div></div></div>
+                    <div class="bar-row"><div class="bar-broker">RabbitMQ</div><div class="bar-track"><div class="bar-fill rabbit" style="width: 100%;">12,231 ms</div></div></div>
                 </div>
             </div>
         </div>
 
-        <h3>Data Table (Request-Reply, P95 ms)</h3>
         <div class="chart-container">
             <table>
-                <thead>
-                    <tr>
-                        <th>Scenario</th>
-                        <th>RabbitMQ</th>
-                        <th>Kafka</th>
-                        <th>NATS</th>
-                        <th>Rabbit / NATS</th>
-                        <th>Kafka / NATS</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Scenario</th><th>RabbitMQ</th><th>Kafka</th><th>NATS</th><th>Rabbit / NATS</th><th>Kafka / NATS</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td>25K x 256 B</td>
-                        <td>23,080</td>
-                        <td>37,723</td>
-                        <td class="best">419</td>
-                        <td>55.1</td>
-                        <td>90.0</td>
-                    </tr>
-                    <tr>
-                        <td>10K x 1 KB</td>
-                        <td>12,435</td>
-                        <td>15,546</td>
-                        <td class="best">224</td>
-                        <td>55.5</td>
-                        <td>69.4</td>
-                    </tr>
-                    <tr>
-                        <td>5K x 4 KB</td>
-                        <td>9,384</td>
-                        <td>6,586</td>
-                        <td class="best">177</td>
-                        <td>53.0</td>
-                        <td>37.2</td>
-                    </tr>
+                    <tr><td>25K x 256 B</td><td>41,450</td><td>36,572</td><td class="best">397</td><td>104.41</td><td>92.12</td></tr>
+                    <tr><td>10K x 1 KB</td><td>21,434</td><td>15,113</td><td class="best">226</td><td>94.84</td><td>66.87</td></tr>
+                    <tr><td>5K x 4 KB</td><td>12,231</td><td>7,339</td><td class="best">159</td><td>76.92</td><td>46.16</td></tr>
                 </tbody>
             </table>
         </div>
@@ -629,28 +547,107 @@
         <h3>Messages per Second (Request-Reply, at P95)</h3>
         <div class="chart-container">
             <table>
-                <thead>
-                    <tr>
-                        <th>Scenario</th>
-                        <th>RabbitMQ</th>
-                        <th>Kafka</th>
-                        <th>NATS</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Scenario</th><th>RabbitMQ</th><th>Kafka</th><th>NATS</th></tr></thead>
                 <tbody>
-                    <tr><td>25K x 256 B</td><td>1,083</td><td>663</td><td class="best">59,665</td></tr>
-                    <tr><td>10K x 1 KB</td><td>804</td><td>643</td><td class="best">44,643</td></tr>
-                    <tr><td>5K x 4 KB</td><td>533</td><td>759</td><td class="best">28,249</td></tr>
+                    <tr><td>25K x 256 B</td><td>603</td><td>684</td><td class="best">62,972</td></tr>
+                    <tr><td>10K x 1 KB</td><td>467</td><td>662</td><td class="best">44,248</td></tr>
+                    <tr><td>5K x 4 KB</td><td>409</td><td>681</td><td class="best">31,447</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <div class="note">
-            <strong>Note on metric:</strong> All values are P95 (95th percentile) completion time. P95 captures tail latency while filtering warm-up noise. The <code>StatisticColumn.Median</code> column has been added to the BenchmarkDotNet config for future runs.
+        <p>NATS is 46-92x faster than Kafka and 77-104x faster than RabbitMQ at P95. This is the difference between a native protocol primitive (one network round-trip) and an application-level emulation (four broker operations per request).</p>
+        <p>RabbitMQ is the slowest in all request-reply scenarios, with P95 degrading linearly: 12.2s for 5K messages, 21.4s for 10K, 41.4s for 25K. The per-message overhead is roughly constant at ~1.7 ms, dominated by the ACK cycle on both request and reply queues.</p>
+        <p>Kafka also shows high tail latency: P95 reaches 36.6s on the 25K scenario (Mean is 23.3s), indicating consumer group coordination and offset management overhead amplified in what is effectively a synchronous request pattern.</p>
+
+        <!-- ==================== BROKER COMPARISON ==================== -->
+
+        <h2>Broker Comparison</h2>
+
+        <h3>RabbitMQ 4.2</h3>
+        <div class="pros-cons">
+            <h4 class="strengths">Strengths</h4>
+            <ul>
+                <li>Mature AMQP implementation with 15+ years of production usage</li>
+                <li>Rich routing model: direct, topic, fanout, and headers exchanges with flexible bindings</li>
+                <li>Management UI included (port 15672), exposing queue depths, message rates, connection counts</li>
+                <li>Lowest managed memory allocation in benchmarks, particularly with large payloads</li>
+                <li>Multi-protocol support: AMQP 0.9.1, AMQP 1.0, MQTT 3.1.1/5.0, STOMP</li>
+                <li>Plugin ecosystem: delayed message exchange, federation, shovel, consistent hash exchange</li>
+                <li>Quorum queues and streams for HA and replay scenarios</li>
+            </ul>
+            <h4 class="weaknesses">Weaknesses</h4>
+            <ul>
+                <li>1.6-1.8x slower than NATS on small message async throughput</li>
+                <li>No native request-reply, must be implemented via correlation IDs</li>
+                <li>Classic mirrored queues deprecated; quorum queues improve HA but add latency</li>
+                <li>Erlang runtime limits low-level troubleshooting and custom extensions</li>
+                <li>Clustering can exhibit split-brain under network partitions</li>
+            </ul>
         </div>
 
+        <h3>Apache Kafka 4.2</h3>
+        <div class="pros-cons">
+            <h4 class="strengths">Strengths</h4>
+            <ul>
+                <li>Distributed commit log with configurable retention, allowing consumers to replay from any offset</li>
+                <li>Horizontal throughput scaling via partition-based parallelism</li>
+                <li>Exactly-once semantics with idempotent producers and transactional API</li>
+                <li>Extensive ecosystem: Kafka Connect (200+ connectors), Kafka Streams, ksqlDB, Schema Registry</li>
+                <li>Standard for event sourcing, CDC (Debezium), and data pipeline architectures</li>
+                <li>KRaft mode removes ZooKeeper dependency</li>
+            </ul>
+            <h4 class="weaknesses">Weaknesses</h4>
+            <ul>
+                <li>Slowest in every scenario in this benchmark (single-node, single-partition is its worst case)</li>
+                <li>327 MiB RAM on cold start (JVM heap), 54x NATS</li>
+                <li>High operational complexity: partitions, ISR, consumer group rebalancing, offset management</li>
+                <li>Consumer group rebalancing causes consumption pauses</li>
+                <li>Latency-optimized for batched throughput, not per-message delivery</li>
+                <li>No native request-reply</li>
+            </ul>
+        </div>
+
+        <h3>NATS 2.12 with JetStream</h3>
+        <div class="pros-cons">
+            <h4 class="strengths">Strengths</h4>
+            <ul>
+                <li>Fastest in 3 out of 5 async scenarios, and all 3 request-reply scenarios</li>
+                <li>Native request-reply at the protocol level, no application-level workarounds needed</li>
+                <li>Operationally minimal: single binary, single flag (<code>-js</code>) enables persistence</li>
+                <li>6 MiB RAM on cold start</li>
+                <li>JetStream provides persistence, replay, exactly-once delivery, de-duplication</li>
+                <li>Subject-based routing with hierarchical wildcards</li>
+                <li>Built-in key-value store and object store</li>
+                <li>Service discovery via <code>micro</code> package</li>
+                <li>Leafnode and gateway topologies for multi-cluster deployments</li>
+            </ul>
+            <h4 class="weaknesses">Weaknesses</h4>
+            <ul>
+                <li>Higher managed memory allocation per message (up to 678 MB on 50K x 256 B)</li>
+                <li>Slower than RabbitMQ on large payloads (64 KB+), ratio 0.61-0.94</li>
+                <li>Smaller community and fewer production war stories compared to RabbitMQ/Kafka</li>
+                <li>JetStream is younger than Kafka Streams; less battle-tested at extreme scale</li>
+                <li>Monitoring/observability tooling is less mature</li>
+            </ul>
+        </div>
+
+        <!-- ==================== CONCLUSION ==================== -->
+
+        <h2>Conclusion</h2>
+
+        <p>For new projects that need a general-purpose message broker, NATS is the most practical starting point.</p>
+
+        <p>It provides a feature set comparable to Kafka: persistence with replay, exactly-once delivery, stream processing primitives, key-value and object stores. At the same time, its throughput on small-to-medium payloads matches or exceeds RabbitMQ, and it handles request-reply 46-105x faster than either alternative at P95 thanks to native protocol support.</p>
+
+        <p>The operational cost is also lower. A single binary with one flag gives you a persistent, JetStream-enabled broker consuming 6 MiB of RAM on cold start. Compare that to Kafka's 327 MiB.</p>
+
+        <p>RabbitMQ remains a strong choice when the workload is primarily large payloads (64 KB+) or when the team has deep AMQP expertise. Kafka is still the right tool for large-scale event streaming, CDC pipelines, and scenarios where partition-based parallelism and the Connect/Streams ecosystem matter.</p>
+
+        <p>But as a default choice for a new distributed system? NATS delivers Kafka-class features at RabbitMQ-class speed, with less operational overhead than either.</p>
+
         <footer>
-            <p>Benchmarked with BenchmarkDotNet v0.15.8 on .NET 10.0.4. All brokers ran in Docker on the same machine with default configurations. Single-node results.</p>
+            <p>Benchmarked with BenchmarkDotNet v0.15.8 on .NET 10.0.4. All brokers ran in Docker on the same machine with default configurations. Single-node results. Production numbers will differ.</p>
             <p style="margin-top: 0.5rem;">Source code: <a href="https://github.com/PetrolMuffin/BrokersPerformance">GitHub</a></p>
         </footer>
     </div>

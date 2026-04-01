@@ -27,7 +27,7 @@ public class NatsRequestReply : IAsyncDisposable
             Url = Configuration.NatsUrl,
             RequestTimeout = TimeSpan.FromMinutes(10),
             SubPendingChannelFullMode = BoundedChannelFullMode.Wait,
-            WriterBufferSize = 1024 * 1024,
+            WriterBufferSize = 1024 * 1024 * 1024,
             CommandTimeout = TimeSpan.FromMinutes(5),
             MaxReconnectRetry = 10
         };

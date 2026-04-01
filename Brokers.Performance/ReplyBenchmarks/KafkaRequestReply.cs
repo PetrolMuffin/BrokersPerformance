@@ -36,6 +36,8 @@ public sealed class KafkaRequestReply : IAsyncDisposable
         {
             BootstrapServers = bootstrap,
             EnableIdempotence = true,
+            QueueBufferingMaxKbytes = 1024 * 1024,
+            QueueBufferingMaxMessages = 1000000
         };
 
         _requesterProducer = new ProducerBuilder<Null, byte[]>(producerConfig).Build();

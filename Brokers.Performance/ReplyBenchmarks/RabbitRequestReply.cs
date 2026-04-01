@@ -119,7 +119,8 @@ public class RabbitRequestReply : IAsyncDisposable
                 var properties = new BasicProperties
                 {
                     CorrelationId = correlationId,
-                    ReplyTo = _replyQueue
+                    ReplyTo = _replyQueue,
+                    Persistent = true
                 };
 
                 await _requesterPubChannel!.BasicPublishAsync("", _requestQueue, true, properties, _payload, token);
@@ -175,7 +176,12 @@ public class RabbitRequestReply : IAsyncDisposable
     {
         await _responderSubChannel!.BasicAckAsync(args.DeliveryTag, multiple: false);
 
-        var properties = new BasicProperties { CorrelationId = args.BasicProperties.CorrelationId };
+        var properties = new BasicProperties
+        {
+            CorrelationId = args.BasicProperties.CorrelationId,
+            Persistent = true
+        };
+
         await _responderPubChannel!.BasicPublishAsync("", args.BasicProperties.ReplyTo!, true, properties, _payload);
     }
 

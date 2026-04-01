@@ -26,7 +26,7 @@ public sealed class KafkaProdCon : IAsyncDisposable
         {
             BootstrapServers = bootstrap,
             EnableIdempotence = true,
-            QueueBufferingMaxKbytes = 1024 * 1024 * 1024,
+            QueueBufferingMaxKbytes = 1024 * 1024,
             QueueBufferingMaxMessages = 1000000
         };
 

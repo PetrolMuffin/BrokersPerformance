@@ -35,7 +35,7 @@ public sealed class NatsJsProdCon : IAsyncDisposable
         var opts = NatsOpts.Default with
         {
             Url = Configuration.NatsUrl,
-            WriterBufferSize = 1024 * 1024,
+            WriterBufferSize = 1024 * 1024 * 1024,
             MaxReconnectRetry = 10,
             ConnectTimeout = TimeSpan.FromSeconds(5)
         };
