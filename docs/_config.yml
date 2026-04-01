@@ -1,3 +1,2 @@
 title: "Message Broker Throughput: RabbitMQ vs Kafka vs NATS"
 description: "Benchmark results comparing RabbitMQ 4.2, Kafka 4.2 (KRaft), and NATS 2.12 (JetStream) on async queue and request-reply patterns"
-baseurl: /brokers.performance

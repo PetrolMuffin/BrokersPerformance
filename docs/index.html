@@ -487,6 +487,27 @@
             </table>
         </div>
 
+        <h3>Messages per Second (Async Queue, at P95)</h3>
+        <div class="chart-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>RabbitMQ</th>
+                        <th>Kafka</th>
+                        <th>NATS JS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>50K x 256 B</td><td>33,069</td><td>1,388</td><td class="best">58,411</td></tr>
+                    <tr><td>25K x 1 KB</td><td>28,376</td><td>1,354</td><td class="best">53,191</td></tr>
+                    <tr><td>10K x 4 KB</td><td>23,474</td><td>1,198</td><td class="best">37,175</td></tr>
+                    <tr><td>5K x 64 KB</td><td class="best-rabbit">9,363</td><td>638</td><td>5,787</td></tr>
+                    <tr><td>2.5K x 128 KB</td><td class="best-rabbit">4,160</td><td>350</td><td>3,320</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <h3>Managed Heap Allocation</h3>
         <div class="chart-container">
             <table>
@@ -601,6 +622,25 @@
                         <td>53.0</td>
                         <td>37.2</td>
                     </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Messages per Second (Request-Reply, at P95)</h3>
+        <div class="chart-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>RabbitMQ</th>
+                        <th>Kafka</th>
+                        <th>NATS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>25K x 256 B</td><td>1,083</td><td>663</td><td class="best">59,665</td></tr>
+                    <tr><td>10K x 1 KB</td><td>804</td><td>643</td><td class="best">44,643</td></tr>
+                    <tr><td>5K x 4 KB</td><td>533</td><td>759</td><td class="best">28,249</td></tr>
                 </tbody>
             </table>
         </div>
